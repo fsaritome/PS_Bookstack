@@ -194,11 +194,13 @@ function updateTear(W, H, t) {
 // ── Artifact Blob Blocks (blocky corrupted pixel regions) ──────────────
 let artifactBlobs = [];
 function spawnArtifactBlobs() {
+  const W = canvas.width;
+  const H = canvas.height;
   const numBlobs = 2 + Math.floor(Math.random() * 5);
   for (let i = 0; i < numBlobs; i++) {
     artifactBlobs.push({
-      x: Math.floor(Math.random() * (cw / 64)) * 64,
-      y: Math.floor(Math.random() * (ch / 64)) * 64,
+      x: Math.floor(Math.random() * (W / 64)) * 64,
+      y: Math.floor(Math.random() * (H / 64)) * 64,
       w: 64 + Math.floor(Math.random() * 128),
       h: 32 + Math.floor(Math.random() * 64),
       life: 2 + Math.floor(Math.random() * 4),

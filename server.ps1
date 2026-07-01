@@ -4,7 +4,7 @@
 
 param(
     [int]$Port = 8888,
-    [string]$Script = "mock-install.ps1"
+    [string]$Script = "installBookstack.ps1"
 )
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -68,7 +68,9 @@ try {
                 try {
                     $psi = [System.Diagnostics.ProcessStartInfo]::new()
                     $psi.FileName = "powershell.exe"
-                    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$sp`""
+                    # -Command with 5>&1 merges Write-Host (stream 5) into stdout
+                    # RedirectStandardError captures Docker/stderr output too
+                    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -Command `"& { . '$sp' } 5>&1`""
                     $psi.RedirectStandardOutput = $true
                     $psi.RedirectStandardError  = $true
                     $psi.UseShellExecute = $false

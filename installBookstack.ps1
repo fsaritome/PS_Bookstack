@@ -178,55 +178,12 @@ else {
 }
 
 # ---------------------------------------------------------------------------
-# 8. Stream logs until BookStack is ready, then show summary
+# 8. Tell browser the URL to poll, then stream logs
 # ---------------------------------------------------------------------------
-Write-Host ""
-Write-Host "--- Streaming container logs, waiting for BookStack to become ready... ---" -ForegroundColor Cyan
-
-# Start docker logs as a background process
-$logPsi = [System.Diagnostics.ProcessStartInfo]::new()
-$logPsi.FileName = "docker"
-$logPsi.Arguments = "compose -f `"$composePath`" logs --follow --tail 50"
-$logPsi.WorkingDirectory = $ProjectDir
-$logPsi.UseShellExecute = $false
-$logPsi.RedirectStandardOutput = $true
-$logPsi.RedirectStandardError = $true
-$logPsi.CreateNoWindow = $true
-$logProc = [System.Diagnostics.Process]::Start($logPsi)
-
-# Read and print log lines while polling for readiness
-$readyTask = $logProc.StandardOutput.ReadLineAsync()
-$ready = $false
-$maxWait = 180  # seconds
-$elapsed = 0
-
-while (-not $ready -and $elapsed -lt $maxWait) {
-    # Print any available log lines
-    while ($readyTask.IsCompleted) {
-        $line = $readyTask.Result
-        if ($null -ne $line) { Write-Host $line }
-        $readyTask = $logProc.StandardOutput.ReadLineAsync()
-    }
-
-    # Check if BookStack HTTP is responding
-    try {
-        $r = Invoke-WebRequest -Uri $AppUrl -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
-        if ($r.StatusCode -lt 500) { $ready = $true; break }
-    } catch {}
-
-    Start-Sleep -Milliseconds 500
-    $elapsed += 0.5
-}
-
-# Kill log process
-Start-Sleep -Milliseconds 500
-try { $logProc.Kill() } catch {}
-try { $logProc.WaitForExit(2000) } catch {}
+Write-Output "__URL__:$AppUrl"
 
 Write-Host ""
-Write-Host "============================================" -ForegroundColor Magenta
-Write-Host "  BOOKSTACK IS READY!" -ForegroundColor Green
-Write-Host "  $AppUrl" -ForegroundColor Cyan
-Write-Host "  Login: admin@admin.com / password" -ForegroundColor Cyan
-Write-Host "============================================" -ForegroundColor Magenta
-Write-Output "__READY__:$AppUrl"
+Write-Host "--- Streaming container logs ---" -ForegroundColor Cyan
+Push-Location $ProjectDir
+docker compose logs --follow
+Pop-Location

@@ -92,10 +92,13 @@ try {
                 $p = Start-Process "docker" -ArgumentList "version" -NoNewWindow -Wait -PassThru -RedirectStandardOutput "NUL"
                 $dockerOk = ($p.ExitCode -eq 0)
             } catch {}
-            $body = if ($dockerOk) { '{"docker":true}' } else { '{"docker":false}' }
+            $ramGb    = [math]::Round((Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory / 1GB, 1)
+            $cpuCores = (Get-CimInstance Win32_Processor | Measure-Object -Property NumberOfLogicalProcessors -Sum).Sum
+            $diskGb   = [math]::Round((Get-PSDrive C).Free / 1GB, 1)
+            $body = "{`"docker`":$($dockerOk.ToString().ToLower()),`"ram_gb`":$ramGb,`"cpu_cores`":$cpuCores,`"disk_gb`":$diskGb}"
             $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
             $context.Response.ContentType = "application/json"
-            $context.Response.StatusCode = if ($dockerOk) { 200 } else { 503 }
+            $context.Response.StatusCode = 200
             $context.Response.ContentLength64 = $bytes.Length
             $context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
             $context.Response.OutputStream.Close()

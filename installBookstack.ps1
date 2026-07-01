@@ -181,6 +181,9 @@ Write-Host "`n=== Done ===" -ForegroundColor Cyan
 Write-Host "Give the database a few seconds to initialize on first boot."
 Write-Host "BookStack will be available at: $AppUrl"
 Write-Host "Default login: admin@admin.com / password"
-Write-Host "`nUseful commands:"
-Write-Host "  docker compose -f `"$composePath`" logs -f bookstack    # watch BookStack logs"
+Write-Host ""
+Write-Host "--- Streaming container logs (Ctrl+C to stop) ---" -ForegroundColor Cyan
+Push-Location $ProjectDir
+docker compose logs --follow
+Pop-Location
 Write-Host "  docker compose -f `"$composePath`" down                 # stop everything"

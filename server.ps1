@@ -1,105 +1,105 @@
-# server.ps1 - Pure PowerShell HTTP server, no installs required
-# Uses System.Net.HttpListener (built into .NET / Windows)
-# Runs mock-install.ps1 and streams output via Server-Sent Events
+# server.ps1 - Pure PowerShell HTTP server using System.Net.HttpListener
+# Zero installs required - .NET is built into Windows
+# Streams PowerShell script output via Server-Sent Events
 
 param(
     [int]$Port = 8888,
     [string]$Script = "installBookstack.ps1"
 )
 
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ScriptPath = Join-Path $ScriptDir $Script
 $HtmlPath   = Join-Path $ScriptDir "demoscene.html"
-
-$listener = [System.Net.HttpListener]::new()
-$listener.Prefixes.Add("http://localhost:$Port/")
-$listener.Start()
-
-Write-Host "Server running at http://localhost:$Port/"
-Write-Host "Press Ctrl+C to stop."
 
 $listener = [System.Net.HttpListener]::new()
 $listener.Prefixes.Add("http://127.0.0.1:$Port/")
 $listener.Start()
 
-Write-Host "Server running at http://127.0.0.1:$Port/"
+Write-Host "Server running at http://127.0.0.1:$Port/" -ForegroundColor Cyan
+Write-Host "Script: $ScriptPath" -ForegroundColor Cyan
 Write-Host "Press Ctrl+C to stop."
 
 Start-Process "http://127.0.0.1:$Port/demoscene.html"
 
-$ScriptDir_ = $ScriptDir
-$ScriptPath_ = $ScriptPath
-$HtmlPath_ = $HtmlPath
+$streamHandler = {
+    param($ctx, $sp)
+    $resp = $ctx.Response
+    $resp.ContentType = "text/event-stream; charset=utf-8"
+    $resp.Headers.Add("Cache-Control", "no-cache")
+    $resp.Headers.Add("Access-Control-Allow-Origin", "*")
+    $resp.SendChunked = $true
+    $writer = [System.IO.StreamWriter]::new($resp.OutputStream, [System.Text.Encoding]::UTF8)
+    $writer.AutoFlush = $true
+    try {
+        $psi = [System.Diagnostics.ProcessStartInfo]::new()
+        $psi.FileName               = "powershell.exe"
+        $psi.Arguments              = "-NoProfile -ExecutionPolicy Bypass -Command `"& { . '$sp' } 5>&1`""
+        $psi.RedirectStandardOutput = $true
+        $psi.RedirectStandardError  = $true
+        $psi.UseShellExecute        = $false
+        $psi.CreateNoWindow         = $true
+        $psi.WorkingDirectory       = Split-Path $sp
+        $proc = [System.Diagnostics.Process]::Start($psi)
+        $stdoutTask = $proc.StandardOutput.ReadLineAsync()
+        $stderrTask = $proc.StandardError.ReadLineAsync()
+        while (-not $proc.HasExited -or $stdoutTask.Status -eq 'Running' -or $stderrTask.Status -eq 'Running') {
+            if ($stdoutTask.IsCompleted) {
+                $line = $stdoutTask.Result
+                if ($null -ne $line) {
+                    $esc = $line -replace "`r", ''
+                    $writer.WriteLine("data: $esc"); $writer.WriteLine("")
+                }
+                $stdoutTask = $proc.StandardOutput.ReadLineAsync()
+            }
+            if ($stderrTask.IsCompleted) {
+                $line = $stderrTask.Result
+                if ($null -ne $line -and $line.Trim() -ne '') {
+                    $esc = $line -replace "`r", ''
+                    $writer.WriteLine("data: $esc"); $writer.WriteLine("")
+                }
+                $stderrTask = $proc.StandardError.ReadLineAsync()
+            }
+            Start-Sleep -Milliseconds 20
+        }
+        $proc.WaitForExit()
+        $writer.WriteLine("data: __DONE__"); $writer.WriteLine("")
+    } catch {
+        try { $writer.WriteLine("data: [ERROR] $_"); $writer.WriteLine("") } catch {}
+    } finally {
+        try { $writer.Flush(); $resp.OutputStream.Close() } catch {}
+    }
+}
 
 try {
     while ($listener.IsListening) {
-        # GetContextAsync lets us handle each request in a runspace so /stream doesn't block
-        $task = $listener.GetContextAsync()
-        while (-not $task.IsCompleted) { Start-Sleep -Milliseconds 50 }
-        $context = $task.Result
-        $req  = $context.Request
-        $resp = $context.Response
-        $path = $req.Url.AbsolutePath
+        $asyncResult = $listener.BeginGetContext($null, $null)
+        while (-not $asyncResult.IsCompleted) { Start-Sleep -Milliseconds 50 }
+        $context = $listener.EndGetContext($asyncResult)
+        $path = $context.Request.Url.AbsolutePath
 
-        if ($path -eq "/demoscene.html" -or $path -eq "/") {
-            $bytes = [System.IO.File]::ReadAllBytes($HtmlPath_)
-            $resp.ContentType = "text/html; charset=utf-8"
-            $resp.ContentLength64 = $bytes.Length
-            $resp.OutputStream.Write($bytes, 0, $bytes.Length)
-            $resp.OutputStream.Close()
+        if ($path -eq "/" -or $path -eq "/demoscene.html") {
+            try {
+                $bytes = [System.IO.File]::ReadAllBytes($HtmlPath)
+                $context.Response.ContentType = "text/html; charset=utf-8"
+                $context.Response.ContentLength64 = $bytes.Length
+                $context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+                $context.Response.OutputStream.Close()
+            } catch { $context.Response.Abort() }
 
         } elseif ($path -eq "/stream") {
-            # Run in a separate runspace so it doesn't block the main loop
             $rs = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace()
             $rs.Open()
-            $rs.SessionStateProxy.SetVariable('context', $context)
-            $rs.SessionStateProxy.SetVariable('ScriptPath', $ScriptPath_)
             $ps = [System.Management.Automation.PowerShell]::Create()
             $ps.Runspace = $rs
-            $ps.AddScript({
-                param($ctx, $sp)
-                $resp = $ctx.Response
-                $resp.ContentType = "text/event-stream"
-                $resp.Headers.Add("Cache-Control", "no-cache")
-                $resp.Headers.Add("Access-Control-Allow-Origin", "*")
-                $resp.SendChunked = $true
-                $writer = [System.IO.StreamWriter]::new($resp.OutputStream, [System.Text.Encoding]::UTF8)
-                $writer.AutoFlush = $true
-                try {
-                    $psi = [System.Diagnostics.ProcessStartInfo]::new()
-                    $psi.FileName = "powershell.exe"
-                    # -Command with 5>&1 merges Write-Host (stream 5) into stdout
-                    # RedirectStandardError captures Docker/stderr output too
-                    $psi.Arguments = "-NoProfile -ExecutionPolicy Bypass -Command `"& { . '$sp' } 5>&1`""
-                    $psi.RedirectStandardOutput = $true
-                    $psi.RedirectStandardError  = $true
-                    $psi.UseShellExecute = $false
-                    $psi.CreateNoWindow  = $true
-                    $proc = [System.Diagnostics.Process]::Start($psi)
-                    while (-not $proc.StandardOutput.EndOfStream) {
-                        $line = $proc.StandardOutput.ReadLine()
-                        $escaped = $line -replace '\\', '\\\\' -replace "`n", '\n' -replace "`r", ''
-                        $writer.WriteLine("data: $escaped")
-                        $writer.WriteLine("")
-                    }
-                    $proc.WaitForExit()
-                    $writer.WriteLine("data: __DONE__")
-                    $writer.WriteLine("")
-                } catch {
-                    $writer.WriteLine("data: [ERROR] $_")
-                    $writer.WriteLine("")
-                } finally {
-                    $writer.Flush()
-                    $resp.OutputStream.Close()
-                }
-            }).AddArgument($context).AddArgument($ScriptPath_)
-            $ps.BeginInvoke() | Out-Null
+            [void]$ps.AddScript($streamHandler).AddArgument($context).AddArgument($ScriptPath)
+            [void]$ps.BeginInvoke()
 
         } else {
-            $resp.StatusCode = 404
-            $resp.OutputStream.Close()
+            $context.Response.StatusCode = 404
+            $context.Response.OutputStream.Close()
         }
     }
 } finally {
     $listener.Stop()
+    Write-Host "Server stopped."
 }

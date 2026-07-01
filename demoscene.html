@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIGGUS SCREENUS - PHONK EDITION</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #000;
+  overflow: hidden;
+  font-family: 'Courier New', monospace;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  width: 100vw;
+}
+canvas { display: block; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── Stars ────────────────────────────────────────────────────────────────
+const stars = Array.from({length: 300}, () => ({
+  x: Math.random(),
+  y: Math.random(),
+  p: Math.random() * Math.PI * 2,
+  s: Math.random() * 2.5 + 0.5
+}));
+
+// ── Cube (wireframe, rotating) ───────────────────────────────────────────
+const cubeV = [
+  [-1,-1,-1],[1,-1,-1],[1,1,-1],[-1,1,-1],
+  [-1,-1,1],[1,-1,1],[1,1,1],[-1,1,1]
+];
+const cubeE = [
+  [0,1],[1,2],[2,3],[3,0],
+  [4,5],[5,6],[6,7],[7,4],
+  [0,4],[1,5],[2,6],[3,7]
+];
+
+function project(vx, vy, vz, ax, ay, cx, cy, sc) {
+  let nx = vx * Math.cos(ay) + vz * Math.sin(ay);
+  let nz = -vx * Math.sin(ay) + vz * Math.cos(ay);
+  vx = nx; vz = nz;
+  let ny = vy * Math.cos(ax) - vz * Math.sin(ax);
+  nz = vy * Math.sin(ax) + vz * Math.cos(ax);
+  vy = ny; vz = nz;
+  const p = 3.0 / (vz + 4.0);
+  return { x: cx + vx * p * sc, y: cy + vy * p * sc, z: vz };
+}
+
+// ── Jokes (phonk themed) ────────────────────────────────────────────────
+const jokes = [
+  "★  B I G G U S   S C R E E N U S  ★",
+  "★  SCREEN SO BIG, IT'S DRIFTING  ★",
+  "★  COWBELL: MAXIMUM  DISTORTION: UNLIMITED  ★",
+  "★  THIS MONITOR HAS MORE BASS THAN PHONK  ★",
+  "★  4K? MORE LIKE 40K PHONK PIXELS  ★",
+  "★  MEMPHIS RAP MEETS MEMPHIS MONITOR  ★",
+  "★  CHOPPED AND SCREWED... MY NECK  ★",
+  "★  PIXEL DENSITY: HIGHER THAN COWBELL  ★",
+  "★  BIG SCREEN ENERGY × PHONK ENERGY  ★",
+  "★  WHEN YOUR MONITOR GOES HARDER THAN DRIFT PHONK  ★",
+  "★  AGGRESSIVE BASSLINES, AGGRESSIVE PIXELS  ★",
+  "★  THIS SCREEN COULD SAMPLE ITSELF  ★"
+];
+
+// ── Scrolltext ───────────────────────────────────────────────────────────
+const scrollText = "  *** BIGGUS SCREENUS *** PHONK EDITION *** SCREEN SO BIG IT DRIFTS LIKE A JDM CAR *** COWBELL LEVELS: MAXIMUM *** DISTORTION: UNLIMITED *** WHEN 27 INCHES IS TOO SMALL *** THE SCREEN HAS ITS OWN ZIP CODE AND ITS OWN PHONK PLAYLIST *** NEEDS TWO HDMI CABLES AND A PRAYER *** MY NECK HURTS AND I LOVE IT *** BIG SCREENS DON'T LIE — THEY JUST STRETCH THE TRUTH LIKE CHOPPED AND SCREWED *** PRESS ANY KEY TO EXIT *** ";
+
+// ── Phonk color palette (dark, aggressive, high saturation) ─────────────
+const phonkColors = [
+  [0,0,0],      // black
+  [80,0,0],     // dark red
+  [160,0,0],    // red
+  [255,0,0],    // bright red
+  [255,40,0],   // orange-red
+  [255,100,0],  // orange
+  [255,180,0],  // gold
+  [255,255,0],  // yellow
+  [200,255,0],  // lime
+  [0,255,0],    // green
+  [0,200,100],  // teal
+  [0,150,255],  // blue
+  [50,0,200],   // purple
+  [128,0,128],  // magenta
+  [200,0,150],  // pink
+  [255,255,255] // white
+];
+
+function phonkColor(v) {
+  const idx = v * 15;
+  const i = Math.floor(idx);
+  const f = idx - i;
+  const c1 = phonkColors[Math.min(i, 15)];
+  const c2 = phonkColors[Math.min(i + 1, 15)];
+  return [
+    Math.round(c1[0] + (c2[0] - c1[0]) * f),
+    Math.round(c1[1] + (c2[1] - c1[1]) * f),
+    Math.round(c1[2] + (c2[2] - c1[2]) * f)
+  ];
+}
+
+// ── Distortion lines (VHS glitch effect, subtle) ───────────────────────
+function drawGlitchLines(W, H, t) {
+  // Only 20% chance of glitch lines appearing
+  if (Math.random() > 0.2) return;
+  const numLines = 2 + Math.floor(Math.random() * 3);
+  for (let i = 0; i < numLines; i++) {
+    const y = Math.random() * H;
+    const h = 1 + Math.random() * 2;
+    const offset = (Math.random() - 0.5) * 15;
+    const alpha = 0.05 + Math.random() * 0.1;
+    
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = `hsl(${Math.random() * 60 + 340}, 100%, 50%)`;
+    ctx.fillRect(offset, y, W, h);
+    ctx.restore();
+  }
+}
+
+// ── Scanlines (VHS effect, very subtle) ─────────────────────────────────
+function drawScanlines(W, H) {
+  ctx.save();
+  ctx.globalAlpha = 0.03;
+  for (let y = 0; y < H; y += 4) {
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, y, W, 1);
+  }
+  ctx.restore();
+}
+
+// ── Chromatic aberration (RGB split, subtle & intermittent) ────────────
+function drawChromaticAberration(W, H, t) {
+  // Only 15% chance of chromatic aberration
+  if (Math.random() > 0.15) return;
+  const shift = Math.sin(t * 5) * 1.5;
+  if (Math.abs(shift) < 0.5) return;
+  
+  ctx.save();
+  ctx.globalAlpha = 0.06;
+  ctx.globalCompositeOperation = 'screen';
+  ctx.fillStyle = '#ff0000';
+  ctx.fillRect(shift, 0, W, H);
+  ctx.fillStyle = '#0000ff';
+  ctx.fillRect(-shift, 0, W, H);
+  ctx.restore();
+}
+
+// ── Horizontal tearing (VHS tracking loss, hits hard then stops) ───────
+let tearActive = false;
+let tearY = 0;
+let tearHeight = 0;
+let tearOffset = 0;
+
+function updateTear(W, H, t) {
+  if (!tearActive && Math.random() < 0.04) {
+    tearActive = true;
+    tearY = Math.random() * H;
+    tearHeight = 10 + Math.random() * 40;
+    tearOffset = (Math.random() - 0.5) * 100;
+  }
+  if (tearActive && Math.random() < 0.2) {
+    tearActive = false;
+  }
+}
+
+function drawTear(W, H) {
+  if (!tearActive) return;
+  ctx.save();
+  const strip = ctx.getImageData(0, tearY, W, tearHeight);
+  ctx.putImageData(strip, tearOffset, tearY);
+  ctx.restore();
+}
+
+// ── Screen shake (bass hit, rare but heavy) ─────────────────────────────
+let shakeActive = false;
+let shakeIntensity = 0;
+
+function updateShake(t) {
+  if (!shakeActive && Math.random() < 0.02) {
+    shakeActive = true;
+    shakeIntensity = 10 + Math.random() * 15;
+  }
+  if (shakeActive) {
+    shakeIntensity *= 0.8;
+    if (shakeIntensity < 0.3) shakeActive = false;
+  }
+}
+
+function getShakeOffset() {
+  if (!shakeActive) return { x: 0, y: 0 };
+  return {
+    x: (Math.random() - 0.5) * shakeIntensity * 2,
+    y: (Math.random() - 0.5) * shakeIntensity
+  };
+}
+
+// ── Pixel displacement (blocky, like corrupted data) ────────────────────
+function drawPixelDisplacement(W, H, t) {
+  if (Math.random() > 0.06) return;
+  const numBlocks = 2 + Math.floor(Math.random() * 5);
+  for (let i = 0; i < numBlocks; i++) {
+    const bx = Math.random() * W;
+    const by = Math.random() * H;
+    const bw = 30 + Math.random() * 120;
+    const bh = 5 + Math.random() * 20;
+    const shift = (Math.random() - 0.5) * 50;
+    
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    const block = ctx.getImageData(bx, by, bw, bh);
+    ctx.putImageData(block, bx + shift, by);
+    ctx.restore();
+  }
+}
+
+// ── Main loop ────────────────────────────────────────────────────────────
+let scrollX = 0;
+let frame = 0;
+let running = true;
+
+function draw() {
+  if (!running) return;
+  
+  if (canvas.width === 0 || canvas.height === 0) {
+    resize();
+    if (canvas.width === 0 || canvas.height === 0) {
+      requestAnimationFrame(draw);
+      return;
+    }
+  }
+  
+  frame++;
+  const t = frame * 0.03;
+  const W = canvas.width;
+  const H = canvas.height;
+
+  // ── 1. PLASMA BACKGROUND (phonk style, lower res for performance) ──
+  const plasmaScale = 4;
+  const pw = Math.ceil(W / plasmaScale);
+  const ph = Math.ceil(H / plasmaScale);
+  const imgData = ctx.createImageData(pw, ph);
+  const data = imgData.data;
+
+  for (let py = 0; py < ph; py++) {
+    for (let px = 0; px < pw; px++) {
+      const fx = px / pw;
+      const fy = py / ph;
+      // More aggressive plasma with phonk colors
+      const v = Math.sin(fx * 14 + t * 1.2) + Math.sin(fy * 14 + t * 0.9) +
+                Math.sin((fx + fy) * 10 + t * 1.5) + Math.sin(Math.sqrt(fx*fx + fy*fy) * 12 + t * 0.7);
+      const vn = (v + 4) / 8;
+      const [r, g, b] = phonkColor(vn);
+      const idx = (py * pw + px) * 4;
+      data[idx] = r;
+      data[idx + 1] = g;
+      data[idx + 2] = b;
+      data[idx + 3] = 255;
+    }
+  }
+
+  // Draw plasma to offscreen canvas then scale up
+  const offscreen = document.createElement('canvas');
+  offscreen.width = pw;
+  offscreen.height = ph;
+  offscreen.getContext('2d').putImageData(imgData, 0, 0);
+  
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(offscreen, 0, 0, W, H);
+  ctx.restore();
+
+  // ── 2. Stars ──────────────────────────────────────────────────────────
+  ctx.save();
+  for (const star of stars) {
+    const brightness = 0.4 + 0.6 * Math.sin(t * 0.4 + star.p);
+    ctx.globalAlpha = brightness;
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(star.x * W, star.y * H, star.s, star.s);
+  }
+  ctx.restore();
+
+  // ── 3. Monitor bezel (grows wider over time) ──────────────────────────
+  const baseMonW = Math.min(600, W * 0.7);
+  const growFactor = 1 + 0.3 * Math.sin(t * 0.5); // Pulsing growth
+  const monW = baseMonW * growFactor;
+  const monH = Math.min(300, H * 0.45);
+  const mx = W / 2 - monW / 2;
+  const my = H / 2 - monH / 2;
+  const bezel = 18;
+
+  // Monitor glow
+  const glowHue = (t * 40) % 360;
+  ctx.save();
+  ctx.shadowColor = `hsl(${glowHue}, 100%, 50%)`;
+  ctx.shadowBlur = 30 + 20 * Math.sin(t * 2);
+  ctx.fillStyle = `hsl(${glowHue}, 60%, 8%)`;
+  ctx.beginPath();
+  ctx.roundRect(mx - bezel/2, my - bezel/2, monW + bezel, monH + bezel, 8);
+  ctx.fill();
+  ctx.restore();
+
+  // Monitor screen
+  ctx.fillStyle = '#000';
+  ctx.fillRect(mx, my, monW, monH);
+
+  // ── 4. Cube inside monitor ────────────────────────────────────────────
+  const cx = mx + monW / 2;
+  const cy = my + monH / 2;
+  const cubeScale = monW * 0.22;
+  const rotX = t * 1.5;
+  const rotY = t * 1.2;
+
+  const projected = cubeV.map(v => project(v[0], v[1], v[2], rotX, rotY, cx, cy, cubeScale));
+
+  ctx.save();
+  ctx.lineWidth = 2;
+  for (const [a, b] of cubeE) {
+    const pa = projected[a];
+    const pb = projected[b];
+    const dz = (pa.z + pb.z) / 2;
+    const hue = 180 + dz * 40;
+    ctx.strokeStyle = `hsl(${hue}, 100%, ${50 + dz * 15}%)`;
+    ctx.beginPath();
+    ctx.moveTo(pa.x, pa.y);
+    ctx.lineTo(pb.x, pb.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // ── 5. Joke text inside monitor ───────────────────────────────────────
+  const jokeIdx = Math.floor(t * 2) % jokes.length;
+  const joke = jokes[jokeIdx];
+  
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = `hsl(${(t * 60 + 120) % 360}, 100%, 70%)`;
+  ctx.font = `bold ${Math.max(14, Math.min(22, monW * 0.04))}px 'Courier New', monospace`;
+  ctx.shadowColor = ctx.fillStyle;
+  ctx.shadowBlur = 15;
+  ctx.fillText(joke, cx, cy - monH * 0.25);
+  ctx.shadowBlur = 0;
+  ctx.restore();
+
+  // ── 6. Monitor pole and base ──────────────────────────────────────────
+  const poleW = 16;
+  const poleH = 50;
+  const poleX = mx + monW / 2 - poleW / 2;
+  const poleY = my + monH;
+  
+  ctx.fillStyle = `hsl(${glowHue}, 40%, 15%)`;
+  ctx.fillRect(poleX, poleY, poleW, poleH);
+  
+  const baseW = 80;
+  const baseH = 8;
+  const baseX = mx + monW / 2 - baseW / 2;
+  const baseY = poleY + poleH;
+  
+  ctx.fillStyle = `hsl(${glowHue}, 50%, 20%)`;
+  ctx.fillRect(baseX, baseY, baseW, baseH);
+
+  // ── 7. Title ──────────────────────────────────────────────────────────
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.shadowColor = `hsl(${glowHue}, 100%, 60%)`;
+  ctx.shadowBlur = 20;
+  ctx.fillStyle = `hsl(${glowHue}, 100%, 70%)`;
+  ctx.font = `bold ${Math.max(20, Math.min(32, W * 0.025))}px 'Courier New', monospace`;
+  ctx.fillText('★★★  B I G G U S   S C R E E N U S  ★★★★★', W / 2, 35);
+  ctx.shadowBlur = 0;
+
+  // Subtitle
+  ctx.fillStyle = `hsl(${(t * 70 + 180) % 360}, 80%, 60%)`;
+  ctx.font = `${Math.max(12, Math.min(18, W * 0.015))}px 'Courier New', monospace`;
+  ctx.fillText(`PHONK EDITION  |  F:${String(frame).padStart(5, '0')}  |  PRESS ANY KEY TO EXIT`, W / 2, 58);
+  ctx.restore();
+
+  // ── 8. Scrolltext ─────────────────────────────────────────────────────
+  scrollX -= 1.5;
+  if (scrollX < -ctx.measureText(scrollText).width) scrollX = W;
+  
+  ctx.save();
+  ctx.fillStyle = `hsl(${(t * 50 + 200) % 360}, 90%, 65%)`;
+  ctx.font = `${Math.max(13, Math.min(18, W * 0.012))}px 'Courier New', monospace`;
+  ctx.textAlign = 'left';
+  ctx.fillText(scrollText, scrollX, H - 15);
+  ctx.restore();
+
+  // ── 9. VHS Glitch effects ─────────────────────────────────────────────
+  drawGlitchLines(W, H, t);
+  drawScanlines(W, H);
+  drawChromaticAberration(W, H, t);
+
+  // ── 10. Distortion bars (rare, subtle) ────────────────────────────────
+  if (Math.random() < 0.08) {
+    const numBars = 1 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < numBars; i++) {
+      const y = Math.random() * H;
+      const h = 1;
+      ctx.save();
+      ctx.globalAlpha = 0.1;
+      ctx.fillStyle = `hsl(${Math.random() * 60 + 330}, 100%, 50%)`;
+      ctx.fillRect(0, y, W, h);
+      ctx.restore();
+    }
+  }
+
+  // ── 11. Heavy phonk distortion (intermittent, hits hard) ─────────────
+  updateTear(W, H, t);
+  updateShake(t);
+  drawTear(W, H);
+  drawPixelDisplacement(W, H, t);
+
+  requestAnimationFrame(draw);
+}
+
+// ── Exit on keypress ────────────────────────────────────────────────────
+document.addEventListener('keydown', () => {
+  running = false;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  
+  // Draw scanlines on exit screen too
+  drawScanlines(canvas.width, canvas.height);
+  
+  ctx.save();
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  
+  // Chromatic aberration on exit text
+  ctx.globalAlpha = 0.6;
+  ctx.fillStyle = '#ff0000';
+  ctx.font = `bold 28px 'Courier New', monospace`;
+  ctx.fillText('★  BIGGUS SCREENUS — may your pixels always be numerous  ★', canvas.width / 2 + 2, canvas.height / 2);
+  
+  ctx.fillStyle = '#0000ff';
+  ctx.fillText('★  BIGGUS SCREENUS — may your pixels always be numerous  ★', canvas.width / 2 - 2, canvas.height / 2);
+  
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = '#0ff';
+  ctx.fillText('★  BIGGUS SCREENUS — may your pixels always be numerous  ★', canvas.width / 2, canvas.height / 2);
+  
+  ctx.font = `16px 'Courier New', monospace`;
+  ctx.fillStyle = '#888';
+  ctx.fillText('(closed)', canvas.width / 2, canvas.height / 2 + 40);
+  ctx.restore();
+});
+
+// Start
+draw();
+</script>
+</body>
+</html>

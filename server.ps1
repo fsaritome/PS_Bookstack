@@ -86,6 +86,20 @@ try {
                 $context.Response.OutputStream.Close()
             } catch { $context.Response.Abort() }
 
+        } elseif ($path -eq "/healthcheck") {
+            $dockerOk = $false
+            try {
+                $p = Start-Process "docker" -ArgumentList "version" -NoNewWindow -Wait -PassThru -RedirectStandardOutput "NUL"
+                $dockerOk = ($p.ExitCode -eq 0)
+            } catch {}
+            $body = if ($dockerOk) { '{"docker":true}' } else { '{"docker":false}' }
+            $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
+            $context.Response.ContentType = "application/json"
+            $context.Response.StatusCode = if ($dockerOk) { 200 } else { 503 }
+            $context.Response.ContentLength64 = $bytes.Length
+            $context.Response.OutputStream.Write($bytes, 0, $bytes.Length)
+            $context.Response.OutputStream.Close()
+
         } elseif ($path -eq "/stream") {
             $rs = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspace()
             $rs.Open()

@@ -215,8 +215,17 @@ function startMusic() {
   scheduler();
 }
 
+// Pixabay Phonk Track (telefon-phonk-brazilian-phonk-phonk-music-545509)
+// License: Pixabay Content License (free to use)
+const pixabayPhonkAudio = new Audio('https://cdn.pixabay.com/audio/2023/08/15/audio_3b32b0d6a3.mp3');
+pixabayPhonkAudio.loop = true;
+pixabayPhonkAudio.volume = 0.7;
+
 // Start on first interaction (browser autoplay policy)
-document.addEventListener('click', startMusic);
+document.addEventListener('click', () => {
+  startMusic();
+  if (pixabayPhonkAudio.paused) pixabayPhonkAudio.play().catch(() => {});
+});
 
 // ── Stars ────────────────────────────────────────────────────────────────
 const stars = Array.from({length: 300}, () => ({
@@ -362,6 +371,40 @@ function updateTear(W, H, t) {
   }
   if (tearActive && Math.random() < 0.2) {
     tearActive = false;
+  }
+}
+
+// ── Artifact Blob Blocks (blocky corrupted pixel regions) ──────────────
+let artifactBlobs = [];
+function spawnArtifactBlobs() {
+  const numBlobs = 2 + Math.floor(Math.random() * 5);
+  for (let i = 0; i < numBlobs; i++) {
+    artifactBlobs.push({
+      x: Math.floor(Math.random() * (cw / 64)) * 64,
+      y: Math.floor(Math.random() * (ch / 64)) * 64,
+      w: 64 + Math.floor(Math.random() * 128),
+      h: 32 + Math.floor(Math.random() * 64),
+      life: 2 + Math.floor(Math.random() * 4),
+      color: `rgba(${Math.random() > 0.5 ? 255 : 0},${Math.random() > 0.5 ? 0 : Math.floor(Math.random()*255)},${Math.random() > 0.5 ? 255 : 0},0.${0.1 + Math.random() * 0.3})`
+    });
+  }
+}
+function drawArtifactBlobs() {
+  for (let i = artifactBlobs.length - 1; i >= 0; i--) {
+    const b = artifactBlobs[i];
+    ctx.fillStyle = b.color;
+    ctx.fillRect(b.x, b.y, b.w, b.h);
+    // Draw blocky pixel artifacts inside
+    for (let px = 0; px < b.w; px += 16) {
+      for (let py = 0; py < b.h; py += 16) {
+        if (Math.random() > 0.5) {
+          ctx.fillStyle = `rgba(${Math.floor(Math.random()*255)},${Math.floor(Math.random()*255)},${Math.floor(Math.random()*255)},0.2)`;
+          ctx.fillRect(b.x + px, b.y + py, 16, 16);
+        }
+      }
+    }
+    b.life--;
+    if (b.life <= 0) artifactBlobs.splice(i, 1);
   }
 }
 
@@ -612,6 +655,10 @@ function draw() {
   updateShake(t);
   drawTear(W, H);
   drawPixelDisplacement(W, H, t);
+
+  // ── 12. Artifact blob blocks (corrupted pixel regions) ───────────────
+  if (Math.random() < 0.04) spawnArtifactBlobs();
+  drawArtifactBlobs();
 
   requestAnimationFrame(draw);
 }

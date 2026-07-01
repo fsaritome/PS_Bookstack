@@ -21,9 +21,15 @@ canvas { display: block; }
 </head>
 <body>
 <canvas id="c"></canvas>
+<audio id="phonkMusic" src="alex-morgan-phonk-brazilian-phonk-phonk-music-545509.mp3" loop autoplay></audio>
 <script>
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+// Force play the audio immediately
+const phonkAudio = document.getElementById('phonkMusic');
+phonkAudio.volume = 0.8;
+phonkAudio.play().catch(() => {});
 
 function resize() {
   canvas.width = window.innerWidth;
@@ -31,20 +37,6 @@ function resize() {
 }
 resize();
 window.addEventListener('resize', resize);
-
-// ── PHONK MUSIC (MP3 from Pixabay) ──────────────────────────────────────
-// Track: telefon-phonk-brazilian-phonk-phonk-music-545509 by alex-morgan
-// License: Pixabay Content License (free to use)
-const phonkAudio = new Audio('alex-morgan-phonk-brazilian-phonk-phonk-music-545509.mp3');
-phonkAudio.loop = true;
-phonkAudio.volume = 0.8;
-
-// Try to start immediately, fallback to first click if browser blocks it
-phonkAudio.play().catch(() => {
-  document.addEventListener('click', () => {
-    phonkAudio.play().catch(() => {});
-  }, { once: true });
-});
 
 // ── Stars ────────────────────────────────────────────────────────────────
 const stars = Array.from({length: 300}, () => ({

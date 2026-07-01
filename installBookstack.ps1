@@ -177,13 +177,63 @@ else {
     Write-Host "Containers started successfully." -ForegroundColor Green
 }
 
-Write-Host "`n=== Done ===" -ForegroundColor Cyan
-Write-Host "Give the database a few seconds to initialize on first boot."
-Write-Host "BookStack will be available at: $AppUrl"
-Write-Host "Default login: admin@admin.com / password"
+# ---------------------------------------------------------------------------
+# 8. Stream logs until BookStack is ready, then show summary
+# ---------------------------------------------------------------------------
 Write-Host ""
-Write-Host "--- Streaming container logs (Ctrl+C to stop) ---" -ForegroundColor Cyan
-Push-Location $ProjectDir
-docker compose logs --follow
-Pop-Location
-Write-Host "  docker compose -f `"$composePath`" down                 # stop everything"
+Write-Host "--- Streaming container logs, waiting for BookStack to become ready... ---" -ForegroundColor Cyan
+
+# Start docker logs as a background process
+$logPsi = [System.Diagnostics.ProcessStartInfo]::new()
+$logPsi.FileName = "docker"
+$logPsi.Arguments = "compose -f `"$composePath`" logs --follow --tail 50"
+$logPsi.WorkingDirectory = $ProjectDir
+$logPsi.UseShellExecute = $false
+$logPsi.RedirectStandardOutput = $true
+$logPsi.RedirectStandardError = $true
+$logPsi.CreateNoWindow = $true
+$logProc = [System.Diagnostics.Process]::Start($logPsi)
+
+# Read and print log lines while polling for readiness
+$readyTask = $logProc.StandardOutput.ReadLineAsync()
+$ready = $false
+$maxWait = 180  # seconds
+$elapsed = 0
+
+while (-not $ready -and $elapsed -lt $maxWait) {
+    # Print any available log lines
+    while ($readyTask.IsCompleted) {
+        $line = $readyTask.Result
+        if ($null -ne $line) { Write-Host $line }
+        $readyTask = $logProc.StandardOutput.ReadLineAsync()
+    }
+
+    # Check if BookStack HTTP is responding
+    try {
+        $r = Invoke-WebRequest -Uri $AppUrl -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
+        if ($r.StatusCode -lt 500) { $ready = $true; break }
+    } catch {}
+
+    Start-Sleep -Milliseconds 500
+    $elapsed += 0.5
+}
+
+# Flush remaining lines briefly then kill log process
+Start-Sleep -Milliseconds 500
+$logProc.Kill()
+$logProc.WaitForExit(2000) | Out-Null
+
+# Print remaining buffered output
+while ($readyTask.IsCompleted -and $null -ne $readyTask.Result) {
+    Write-Host $readyTask.Result
+    $readyTask = $logProc.StandardOutput.ReadLineAsync()
+}
+
+Write-Host ""
+Write-Host ""
+Write-Host "============================================" -ForegroundColor Magenta
+Write-Host "  BOOKSTACK IS READY!" -ForegroundColor Green
+Write-Host "  $AppUrl" -ForegroundColor Cyan
+Write-Host "  Login: admin@admin.com / password" -ForegroundColor Cyan
+Write-Host "============================================" -ForegroundColor Magenta
+Write-Host "__READY__:$AppUrl"

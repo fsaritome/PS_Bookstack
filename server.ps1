@@ -8,8 +8,8 @@ param(
 )
 
 $ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
-$ScriptPath = Join-Path $ScriptDir $Script
-$HtmlPath   = Join-Path $ScriptDir "demoscene.html"
+$ScriptPath = Join-Path $ScriptDir "scripts\$Script"
+$HtmlPath   = Join-Path $ScriptDir "web\demoscene.html"
 
 $listener = [System.Net.HttpListener]::new()
 $listener.Prefixes.Add("http://127.0.0.1:$Port/")

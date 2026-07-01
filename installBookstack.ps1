@@ -218,22 +218,15 @@ while (-not $ready -and $elapsed -lt $maxWait) {
     $elapsed += 0.5
 }
 
-# Flush remaining lines briefly then kill log process
+# Kill log process
 Start-Sleep -Milliseconds 500
-$logProc.Kill()
-$logProc.WaitForExit(2000) | Out-Null
+try { $logProc.Kill() } catch {}
+try { $logProc.WaitForExit(2000) } catch {}
 
-# Print remaining buffered output
-while ($readyTask.IsCompleted -and $null -ne $readyTask.Result) {
-    Write-Host $readyTask.Result
-    $readyTask = $logProc.StandardOutput.ReadLineAsync()
-}
-
-Write-Host ""
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Magenta
 Write-Host "  BOOKSTACK IS READY!" -ForegroundColor Green
 Write-Host "  $AppUrl" -ForegroundColor Cyan
 Write-Host "  Login: admin@admin.com / password" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Magenta
-Write-Host "__READY__:$AppUrl"
+Write-Output "__READY__:$AppUrl"

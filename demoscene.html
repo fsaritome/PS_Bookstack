@@ -39,9 +39,11 @@ const phonkAudio = new Audio('alex-morgan-phonk-brazilian-phonk-phonk-music-5455
 phonkAudio.loop = true;
 phonkAudio.volume = 0.8;
 
-// Start on first click (browser autoplay policy)
-document.addEventListener('click', () => {
-  if (phonkAudio.paused) phonkAudio.play().catch(() => {});
+// Try to start immediately, fallback to first click if browser blocks it
+phonkAudio.play().catch(() => {
+  document.addEventListener('click', () => {
+    phonkAudio.play().catch(() => {});
+  }, { once: true });
 });
 
 // ── Stars ────────────────────────────────────────────────────────────────

@@ -32,6 +32,192 @@ function resize() {
 resize();
 window.addEventListener('resize', resize);
 
+// ── PHONK MUSIC ENGINE (Web Audio API) ──────────────────────────────────
+let audioCtx = null;
+let musicStarted = false;
+let nextNoteTime = 0;
+let beatIndex = 0;
+const bpm = 140;
+const eighthNote = 60 / bpm / 2;
+
+// Patterns (8 eighth notes per bar)
+const kickPat =    [1,0,0,0,1,0,0,1];
+const snarePat =   [0,0,1,0,0,0,1,0];
+const cowbellPat = [1,1,1,1,1,1,1,1]; // Cowbell on EVERYTHING
+const hiHatPat =   [1,0,1,0,1,0,1,0];
+const bassPat =    [1,0,0,0,1,0,0,0];
+const melodyPat =  [0,-1,2,-1,4,-1,3,-1]; // -1 = rest
+
+// C# minor pentatonic (phonk key)
+const melodyNotes = [138.59, 155.56, 174.61, 196, 221.18, 246.94, 261.63];
+
+function playKick(time) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(150, time);
+  osc.frequency.exponentialRampToValueAtTime(30, time + 0.12);
+  gain.gain.setValueAtTime(0.6, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(time);
+  osc.stop(time + 0.3);
+}
+
+function playSnare(time) {
+  // Noise burst
+  const bufferSize = audioCtx.sampleRate * 0.15;
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+  const noise = audioCtx.createBufferSource();
+  noise.buffer = buffer;
+  const noiseGain = audioCtx.createGain();
+  noiseGain.gain.setValueAtTime(0.3, time);
+  noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'highpass';
+  filter.frequency.value = 1000;
+  noise.connect(filter);
+  filter.connect(noiseGain);
+  noiseGain.connect(audioCtx.destination);
+  noise.start(time);
+  noise.stop(time + 0.15);
+  // Body
+  const osc = audioCtx.createOscillator();
+  const oscGain = audioCtx.createGain();
+  osc.type = 'triangle';
+  osc.frequency.setValueAtTime(200, time);
+  osc.frequency.exponentialRampToValueAtTime(80, time + 0.08);
+  oscGain.gain.setValueAtTime(0.3, time);
+  oscGain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+  osc.connect(oscGain);
+  oscGain.connect(audioCtx.destination);
+  osc.start(time);
+  osc.stop(time + 0.1);
+}
+
+function playCowbell(time, freq, vol) {
+  const osc1 = audioCtx.createOscillator();
+  const osc2 = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc1.type = 'square';
+  osc2.type = 'square';
+  osc1.frequency.value = freq;
+  osc2.frequency.value = freq * 1.5;
+  gain.gain.setValueAtTime(vol, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.1);
+  osc1.connect(gain);
+  osc2.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc1.start(time);
+  osc2.start(time);
+  osc1.stop(time + 0.1);
+  osc2.stop(time + 0.1);
+}
+
+function playHiHat(time) {
+  const bufferSize = audioCtx.sampleRate * 0.05;
+  const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+  const noise = audioCtx.createBufferSource();
+  noise.buffer = buffer;
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(0.1, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'highpass';
+  filter.frequency.value = 5000;
+  noise.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+  noise.start(time);
+  noise.stop(time + 0.05);
+}
+
+function playBass(time, freq, duration) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const dist = audioCtx.createWaveShaper();
+  // Distortion curve for phonk bass
+  const samples = 44100;
+  const curve = new Float32Array(samples);
+  for (let i = 0; i < samples; i++) {
+    const x = (i * 2) / samples - 1;
+    curve[i] = ((3 + 20) * x * 20 * (Math.PI / 180)) / (Math.PI + 20 * Math.abs(x));
+  }
+  dist.curve = curve;
+  osc.type = 'sawtooth';
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(0.25, time);
+  gain.gain.setValueAtTime(0.25, time + duration * 0.8);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+  osc.connect(dist);
+  dist.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(time);
+  osc.stop(time + duration);
+}
+
+function playMelody(time, freq, duration) {
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  const filter = audioCtx.createBiquadFilter();
+  osc.type = 'square';
+  osc.frequency.value = freq;
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(2000, time);
+  filter.frequency.exponentialRampToValueAtTime(500, time + duration);
+  gain.gain.setValueAtTime(0.08, time);
+  gain.gain.exponentialRampToValueAtTime(0.001, time + duration);
+  osc.connect(filter);
+  filter.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.start(time);
+  osc.stop(time + duration);
+}
+
+function scheduleBeat(beatTime, idx) {
+  if (kickPat[idx % 8]) playKick(beatTime);
+  if (snarePat[idx % 8]) playSnare(beatTime);
+  if (cowbellPat[idx % 8]) {
+    const cowbellFreq = 680 + (idx % 4) * 40;
+    playCowbell(beatTime, cowbellFreq, 0.06);
+  }
+  if (hiHatPat[idx % 8]) playHiHat(beatTime);
+  if (bassPat[idx % 8]) {
+    const bassFreq = 55 + (idx % 4 === 2 ? 11 : 0);
+    playBass(beatTime, bassFreq, 0.25);
+  }
+  const melIdx = melodyPat[idx % 8];
+  if (melIdx >= 0) {
+    playMelody(beatTime, melodyNotes[melIdx % melodyNotes.length], 0.12);
+  }
+}
+
+function scheduler() {
+  while (nextNoteTime < audioCtx.currentTime + 0.1) {
+    scheduleBeat(nextNoteTime, beatIndex);
+    nextNoteTime += eighthNote;
+    beatIndex++;
+  }
+  if (running) setTimeout(scheduler, 25);
+}
+
+function startMusic() {
+  if (musicStarted) return;
+  audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  nextNoteTime = audioCtx.currentTime;
+  beatIndex = 0;
+  musicStarted = true;
+  scheduler();
+}
+
+// Start on first interaction (browser autoplay policy)
+document.addEventListener('click', startMusic);
+
 // ── Stars ────────────────────────────────────────────────────────────────
 const stars = Array.from({length: 300}, () => ({
   x: Math.random(),
